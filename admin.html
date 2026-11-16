@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard | SAM-SILVA FOOTBALL ACADEMY</title>
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; background: #0f172a; color: #f8fafc; padding: 16px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    h1, h2 { margin-top: 0; color: #38bdf8; }
+    input, textarea, select { width: 100%; padding: 12px; margin: 8px 0 16px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 16px; }
+    button { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #10b981; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; }
+    button:hover { background: #059669; }
+    .btn-danger { background: #ef4444; width: auto; padding: 6px 12px; font-size: 14px; margin-top: 8px; }
+    .btn-logout { background: #64748b; width: auto; padding: 8px 14px; font-size: 14px; float: right; }
+    .item { background: #0f172a; padding: 14px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #38bdf8; }
+    .badge { display: inline-block; background: #334155; padding: 3px 8px; border-radius: 6px; font-size: 12px; color: #38bdf8; margin-bottom: 6px; }
+    .hidden { display: none; }
+    .error { color: #f87171; font-size: 14px; margin-bottom: 10px; }
+    .success { color: #34d399; font-size: 14px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- LOGIN SECTION -->
+    <div id="login-section" class="card">
+      <h1>SAM-SILVA Admin</h1>
+      <p>Sign in to manage your academy website.</p>
+      <div id="login-error" class="error"></div>
+      <input type="email" id="email" placeholder="Admin Email" required>
+      <input type="password" id="password" placeholder="Password" required>
+      <button id="login-btn">Sign In</button>
+    </div>
+
+    <!-- DASHBOARD SECTION -->
+    <div id="dashboard-section" class="hidden">
+      <div class="card">
+        <button id="logout-btn" class="btn-logout">Logout</button>
+        <h1>Admin Dashboard</h1>
+        <p style="color:#94a3b8; font-size:14px;">SAM-SILVA FOOTBALL ACADEMY</p>
+      </div>
+
+      <!-- CREATE POST FORM -->
+      <div class="card">
+        <h2>Post Update / News</h2>
+        <div id="post-status" class="success"></div>
+        <select id="post-category">
+          <option value="Academy News">Academy News</option>
+          <option value="Match Result">Match Result</option>
+          <option value="Upcoming Fixture">Upcoming Fixture</option>
+          <option value="Training Notice">Training Notice</option>
+        </select>
+        <input type="text" id="post-title" placeholder="Headline (e.g. U-17 Friendly Match Victory)" required>
+        <textarea id="post-body" rows="4" placeholder="Write your full announcement or match details here..." required></textarea>
+        <button id="publish-btn">Publish to Website</button>
+      </div>
+
+      <!-- MANAGE POSTS -->
+      <div class="card">
+        <h2>Published Updates</h2>
+        <div id="posts-list"><p style="color:#94a3b8;">Loading posts...</p></div>
+      </div>
+
+      <!-- VIEW PLAYER REGISTRATIONS -->
+      <div class="card">
+        <h2>Player Registrations</h2>
+        <div id="players-list"><p style="color:#94a3b8;">Loading player sign-ups...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://gstatic.com";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://gstatic.com";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, serverTimestamp } from "https://gstatic.com";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAoMdZzrXR7dglab08J9_9ZUOOGwLT7giQ",
+      authDomain: "sam-silva-football-academy.firebaseapp.com",
+      projectId: "sam-silva-football-academy",
+      storageBucket: "sam-silva-football-academy.firebasestorage.app",
+      messagingSenderId: "915183261792",
+      appId: "1:915183261792:web:20e4f4751062536a774b05",
+      measurementId: "G-Y5ZC89XNW1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const loginSection = document.getElementById('login-section');
+    const dashboardSection = document.getElementById('dashboard-section');
+    const loginError = document.getElementById('login-error');
+
+    // Auth state listener
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loginSection.classList.add('hidden');
+        dashboardSection.classList.remove('hidden');
+        loadPosts();
+        loadPlayers();
+      } else {
+        loginSection.classList.remove('hidden');
+        dashboardSection.classList.add('hidden');
+      }
+    });
+
+    // Sign in
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      loginError.textContent = '';
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (err) {
+        loginError.textContent = 'Login failed: ' + err.message;
+      }
+    });
+
+    // Sign out
+    document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+
+    // Publish post
+    document.getElementById('publish-btn').addEventListener('click', async () => {
+      const category = document.getElementById('post-category').value;
+      const title = document.getElementById('post-title').value.trim();
+      const body = document.getElementById('post-body').value.trim();
+      const status = document.getElementById('post-status');
+
+      if (!title || !body) {
+        alert('Please enter both a headline and details.');
+        return;
+      }
+
+      try {
+        await addDoc(collection(db, 'posts'), {
+          category,
+          title,
+          body,
+          createdAt: serverTimestamp()
+        });
+        document.getElementById('post-title').value = '';
+        document.getElementById('post-body').value = '';
+        status.textContent = 'Published live!';
+        setTimeout(() => status.textContent = '', 3000);
+        loadPosts();
+      } catch (err) {
+        alert('Error publishing: ' + err.message);
+      }
+    });
+
+    // Load posts
+    async function loadPosts() {
+      const list = document.getElementById('posts-list');
+      list.innerHTML = '';
+      const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) {
+        list.innerHTML = '<p style="color:#94a3b8;">No updates posted yet.</p>';
+        return;
+      }
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `
+          <span class="badge">${data.category || 'News'}</span>
+          <h3 style="margin:4px 0;">${data.title}</h3>
+          <p style="margin:4px 0; color:#cbd5e1; font-size:14px;">${data.body}</p>
+          <button class="btn-danger" data-id="${docSnap.id}">Delete</button>
+        `;
+        div.querySelector('button').addEventListener('click', async () => {
+          if (confirm('Delete this post?')) {
+            await deleteDoc(doc(db, 'posts', docSnap.id));
+            loadPosts();
+          }
+        });
+        list.appendChild(div);
+      });
+    }
+
+    // Load player registrations
+    async function loadPlayers() {
+      const list = document.getElementById('players-list');
+      list.innerHTML = '';
+      const snapshot = await getDocs(collection(db, 'registrations'));
+      if (snapshot.empty) {
+        list.innerHTML = '<p style="color:#94a3b8;">No player registrations yet.</p>';
+        return;
+      }
+      snapshot.forEach((docSnap) => {
+        const p = docSnap.data();
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `
+          <strong>${p.name || 'Unnamed Player'}</strong> (${p.age || 'N/A'} yrs) - <span style="color:#38bdf8;">${p.position || 'Any Position'}</span><br>
+          <span style="font-size:14px; color:#cbd5e1;">Phone: ${p.phone || 'N/A'}</span>
+        `;
+        list.appendChild(div);
+      });
+    }
+  </script>
+</body>
+  </html>
+  
