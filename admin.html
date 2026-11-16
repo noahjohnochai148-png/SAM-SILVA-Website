@@ -6,7 +6,6 @@
   <title>Admin Dashboard | SAM-SILVA FOOTBALL ACADEMY</title>
   <script src="https://gstatic.com"></script>
   <script src="https://gstatic.com"></script>
-  <script src="https://gstatic.com"></script>
   <style>
     * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
     body { margin: 0; background: #0f172a; color: #f8fafc; padding: 16px; }
@@ -29,17 +28,16 @@
     <!-- LOGIN SECTION -->
     <div id="login-section" class="card">
       <h1>SAM-SILVA Admin</h1>
-      <p id="status-msg" style="color:#34d399; font-size:13px;">Ready to sign in</p>
+      <p style="color:#94a3b8; font-size:14px;">Enter your Admin PIN to open the dashboard.</p>
       <div id="login-error" class="error"></div>
-      <input type="email" id="email" placeholder="Admin Email">
-      <input type="password" id="password" placeholder="Password">
-      <button type="button" id="login-btn" onclick="doLogin()">Sign In</button>
+      <input type="password" id="admin-pin" placeholder="Enter Admin PIN">
+      <button type="button" onclick="unlockDashboard()">Open Dashboard</button>
     </div>
 
     <!-- DASHBOARD SECTION -->
     <div id="dashboard-section" class="hidden">
       <div class="card">
-        <button type="button" onclick="doLogout()" class="btn-logout">Logout</button>
+        <button type="button" onclick="lockDashboard()" class="btn-logout">Lock</button>
         <h1>Admin Dashboard</h1>
         <p style="color:#94a3b8; font-size:14px;">SAM-SILVA FOOTBALL ACADEMY</p>
       </div>
@@ -71,6 +69,8 @@
   </div>
 
   <script>
+    const ADMIN_PIN = "SAMSILVA2026";
+
     const firebaseConfig = {
       apiKey: "AIzaSyAoMdZzrXR7dglab08J9_9ZUOOGwLT7giQ",
       authDomain: "://firebaseapp.com",
@@ -82,60 +82,36 @@
     };
 
     firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
     const db = firebase.firestore();
 
-    function openDashboard() {
+    if (localStorage.getItem('samsilva_unlocked') === 'yes') {
+      showDashboard();
+    }
+
+    function unlockDashboard() {
+      const entered = document.getElementById('admin-pin').value.trim();
+      const errBox = document.getElementById('login-error');
+
+      if (entered === ADMIN_PIN) {
+        localStorage.setItem('samsilva_unlocked', 'yes');
+        errBox.textContent = '';
+        showDashboard();
+      } else {
+        errBox.textContent = 'Wrong PIN. Try again.';
+      }
+    }
+
+    function showDashboard() {
       document.getElementById('login-section').classList.add('hidden');
       document.getElementById('dashboard-section').classList.remove('hidden');
       loadPosts();
       loadPlayers();
     }
 
-    auth.onAuthStateChanged(function(user) {
-      if (user) {
-        openDashboard();
-      }
-    });
-
-    function doLogin() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      const errBox = document.getElementById('login-error');
-      const btn = document.getElementById('login-btn');
-
-      if (!email || !password) {
-        errBox.textContent = 'Please enter both email and password.';
-        return;
-      }
-
-      errBox.textContent = '';
-      btn.textContent = 'Signing in...';
-
-      // 10-second safety timeout so button never hangs forever
-      const timer = setTimeout(function() {
-        btn.textContent = 'Sign In';
-        errBox.textContent = 'Network slow or blocked. Check your mobile data/VPN and tap Sign In again.';
-      }, 10000);
-
-      auth.signInWithEmailAndPassword(email, password)
-        .then(function() {
-          clearTimeout(timer);
-          btn.textContent = 'Sign In';
-          openDashboard();
-        })
-        .catch(function(err) {
-          clearTimeout(timer);
-          btn.textContent = 'Sign In';
-          errBox.textContent = err.message;
-        });
-    }
-
-    function doLogout() {
-      auth.signOut().then(function() {
-        document.getElementById('dashboard-section').classList.add('hidden');
-        document.getElementById('login-section').classList.remove('hidden');
-      });
+    function lockDashboard() {
+      localStorage.removeItem('samsilva_unlocked');
+      document.getElementById('dashboard-section').classList.add('hidden');
+      document.getElementById('login-section').classList.remove('hidden');
     }
 
     function publishPost() {
