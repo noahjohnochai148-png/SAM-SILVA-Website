@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | SAM-SILVA FOOTBALL ACADEMY</title>
-  <script src="https://gstatic.com"></script>
-  <script src="https://gstatic.com"></script>
   <style>
     * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
     body { margin: 0; background: #0f172a; color: #f8fafc; padding: 16px; }
@@ -20,12 +18,11 @@
     .badge { display: inline-block; background: #334155; padding: 3px 8px; border-radius: 6px; font-size: 12px; color: #38bdf8; margin-bottom: 6px; }
     .hidden { display: none; }
     .error { color: #f87171; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
-    .success { color: #34d399; font-size: 14px; margin-bottom: 10px; }
+    .success { color: #34d399; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- LOGIN SECTION -->
     <div id="login-section" class="card">
       <h1>SAM-SILVA Admin</h1>
       <p style="color:#94a3b8; font-size:14px;">Enter your Admin PIN to open the dashboard.</p>
@@ -34,7 +31,6 @@
       <button type="button" onclick="unlockDashboard()">Open Dashboard</button>
     </div>
 
-    <!-- DASHBOARD SECTION -->
     <div id="dashboard-section" class="hidden">
       <div class="card">
         <button type="button" onclick="lockDashboard()" class="btn-logout">Lock</button>
@@ -70,19 +66,8 @@
 
   <script>
     const ADMIN_PIN = "SAMSILVA2026";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyAoMdZzrXR7dglab08J9_9ZUOOGwLT7giQ",
-      authDomain: "://firebaseapp.com",
-      projectId: "sam-silva-football-academy",
-      storageBucket: "sam-silva-football-academy.firebasestorage.app",
-      messagingSenderId: "915183261792",
-      appId: "1:915183261792:web:20e4f4751062536a774b05",
-      measurementId: "G-Y5ZC89XNW1"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
+    const PROJECT_ID = "sam-silva-football-academy";
+    const BASE_URL = `https://googleapis.com{PROJECT_ID}/databases/(default)/documents`;
 
     if (localStorage.getItem('samsilva_unlocked') === 'yes') {
       showDashboard();
@@ -91,7 +76,6 @@
     function unlockDashboard() {
       const entered = document.getElementById('admin-pin').value.trim();
       const errBox = document.getElementById('login-error');
-
       if (entered === ADMIN_PIN) {
         localStorage.setItem('samsilva_unlocked', 'yes');
         errBox.textContent = '';
@@ -114,7 +98,7 @@
       document.getElementById('login-section').classList.remove('hidden');
     }
 
-    function publishPost() {
+    async function publishPost() {
       const category = document.getElementById('post-category').value;
       const title = document.getElementById('post-title').value.trim();
       const body = document.getElementById('post-body').value.trim();
@@ -127,75 +111,96 @@
       }
 
       pubBtn.textContent = 'Publishing...';
+      try {
+        const res = await fetch(`${BASE_URL}/posts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: {
+              category: { stringValue: category },
+              title: { stringValue: title },
+              body: { stringValue: body },
+              createdAt: { integerValue: String(Date.now()) }
+            }
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ? data.error.message : 'Failed to publish');
 
-      db.collection('posts').add({
-        category: category,
-        title: title,
-        body: body,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(function() {
-        pubBtn.textContent = 'Publish to Website';
         document.getElementById('post-title').value = '';
         document.getElementById('post-body').value = '';
         status.textContent = 'Published live!';
-        setTimeout(function() { status.textContent = ''; }, 3000);
+        setTimeout(() => status.textContent = '', 3000);
         loadPosts();
-      }).catch(function(err) {
-        pubBtn.textContent = 'Publish to Website';
+      } catch (err) {
         alert('Error: ' + err.message);
-      });
-    }
-
-    function loadPosts() {
-      const list = document.getElementById('posts-list');
-      db.collection('posts').orderBy('createdAt', 'desc').get().then(function(snapshot) {
-        list.innerHTML = '';
-        if (snapshot.empty) {
-          list.innerHTML = '<p style="color:#94a3b8;">No updates posted yet.</p>';
-          return;
-        }
-        snapshot.forEach(function(docSnap) {
-          const data = docSnap.data();
-          const div = document.createElement('div');
-          div.className = 'item';
-          div.innerHTML = `
-            <span class="badge">${data.category || 'News'}</span>
-            <h3 style="margin:4px 0;">${data.title}</h3>
-            <p style="margin:4px 0; color:#cbd5e1; font-size:14px;">${data.body}</p>
-            <button type="button" class="btn-danger" onclick="deletePost('${docSnap.id}')">Delete</button>
-          `;
-          list.appendChild(div);
-        });
-      }).catch(function(err) {
-        list.innerHTML = '<p style="color:#f87171;">Error loading posts: ' + err.message + '</p>';
-      });
-    }
-
-    function deletePost(id) {
-      if (confirm('Delete this post?')) {
-        db.collection('posts').doc(id).delete().then(loadPosts);
+      } finally {
+        pubBtn.textContent = 'Publish to Website';
       }
     }
 
-    function loadPlayers() {
-      const list = document.getElementById('players-list');
-      db.collection('registrations').get().then(function(snapshot) {
+    async function loadPosts() {
+      const list = document.getElementById('posts-list');
+      try {
+        const res = await fetch(`${BASE_URL}/posts`);
+        const data = await res.json();
         list.innerHTML = '';
-        if (snapshot.empty) {
-          list.innerHTML = '<p style="color:#94a3b8;">No player registrations yet.</p>';
+        if (!data.documents || data.documents.length === 0) {
+          list.innerHTML = '<p style="color:#94a3b8;">No updates posted yet.</p>';
           return;
         }
-        snapshot.forEach(function(docSnap) {
-          const p = docSnap.data();
+        const docs = data.documents.sort((a, b) => {
+          const tA = Number(a.fields?.createdAt?.integerValue || 0);
+          const tB = Number(b.fields?.createdAt?.integerValue || 0);
+          return tB - tA;
+        });
+        docs.forEach(doc => {
+          const f = doc.fields || {};
+          const docId = doc.name.split('/').pop();
           const div = document.createElement('div');
           div.className = 'item';
           div.innerHTML = `
-            <strong>${p.name || 'Unnamed Player'}</strong> (${p.age || 'N/A'} yrs) - <span style="color:#38bdf8;">${p.position || 'Any Position'}</span><br>
-            <span style="font-size:14px; color:#cbd5e1;">Phone: ${p.phone || 'N/A'}</span>
+            <span class="badge">${f.category?.stringValue || 'News'}</span>
+            <h3 style="margin:4px 0;">${f.title?.stringValue || ''}</h3>
+            <p style="margin:4px 0; color:#cbd5e1; font-size:14px;">${f.body?.stringValue || ''}</p>
+            <button type="button" class="btn-danger" onclick="deletePost('${docId}')">Delete</button>
           `;
           list.appendChild(div);
         });
-      });
+      } catch (err) {
+        list.innerHTML = '<p style="color:#f87171;">Error: ' + err.message + '</p>';
+      }
+    }
+
+    async function deletePost(id) {
+      if (!confirm('Delete this post?')) return;
+      await fetch(`${BASE_URL}/posts/${id}`, { method: 'DELETE' });
+      loadPosts();
+    }
+
+    async function loadPlayers() {
+      const list = document.getElementById('players-list');
+      try {
+        const res = await fetch(`${BASE_URL}/registrations`);
+        const data = await res.json();
+        list.innerHTML = '';
+        if (!data.documents || data.documents.length === 0) {
+          list.innerHTML = '<p style="color:#94a3b8;">No player registrations yet.</p>';
+          return;
+        }
+        data.documents.forEach(doc => {
+          const f = doc.fields || {};
+          const div = document.createElement('div');
+          div.className = 'item';
+          div.innerHTML = `
+            <strong>${f.name?.stringValue || 'Unnamed Player'}</strong> (${f.age?.stringValue || 'N/A'} yrs) - <span style="color:#38bdf8;">${f.position?.stringValue || 'Any Position'}</span><br>
+            <span style="font-size:14px; color:#cbd5e1;">Phone: ${f.phone?.stringValue || 'N/A'}</span>
+          `;
+          list.appendChild(div);
+        });
+      } catch (err) {
+        list.innerHTML = '<p style="color:#f87171;">Error: ' + err.message + '</p>';
+      }
     }
   </script>
 </body>
