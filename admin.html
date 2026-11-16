@@ -14,7 +14,7 @@
     .card { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     h1, h2 { margin-top: 0; color: #38bdf8; }
     input, textarea, select { width: 100%; padding: 12px; margin: 8px 0 16px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 16px; }
-    button { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #10b981; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; }
+    button { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #10b981; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
     .btn-danger { background: #ef4444; width: auto; padding: 6px 12px; font-size: 14px; margin-top: 8px; }
     .btn-logout { background: #64748b; width: auto; padding: 8px 14px; font-size: 14px; float: right; }
     .item { background: #0f172a; padding: 14px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #38bdf8; }
@@ -55,7 +55,7 @@
         </select>
         <input type="text" id="post-title" placeholder="Headline (e.g. U-17 Friendly Match Victory)">
         <textarea id="post-body" rows="4" placeholder="Write your full announcement or match details here..."></textarea>
-        <button type="button" onclick="publishPost()">Publish to Website</button>
+        <button type="button" id="pub-btn" onclick="publishPost()">Publish to Website</button>
       </div>
 
       <div class="card">
@@ -85,15 +85,16 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
 
+    function openDashboard() {
+      document.getElementById('login-section').classList.add('hidden');
+      document.getElementById('dashboard-section').classList.remove('hidden');
+      loadPosts();
+      loadPlayers();
+    }
+
     auth.onAuthStateChanged(function(user) {
       if (user) {
-        document.getElementById('login-section').classList.add('hidden');
-        document.getElementById('dashboard-section').classList.remove('hidden');
-        loadPosts();
-        loadPlayers();
-      } else {
-        document.getElementById('login-section').classList.remove('hidden');
-        document.getElementById('dashboard-section').classList.add('hidden');
+        openDashboard();
       }
     });
 
@@ -111,19 +112,30 @@
       errBox.textContent = '';
       btn.textContent = 'Signing in...';
 
+      // 10-second safety timeout so button never hangs forever
+      const timer = setTimeout(function() {
+        btn.textContent = 'Sign In';
+        errBox.textContent = 'Network slow or blocked. Check your mobile data/VPN and tap Sign In again.';
+      }, 10000);
+
       auth.signInWithEmailAndPassword(email, password)
         .then(function() {
+          clearTimeout(timer);
           btn.textContent = 'Sign In';
+          openDashboard();
         })
         .catch(function(err) {
+          clearTimeout(timer);
           btn.textContent = 'Sign In';
           errBox.textContent = err.message;
-          alert('Login failed: ' + err.message);
         });
     }
 
     function doLogout() {
-      auth.signOut();
+      auth.signOut().then(function() {
+        document.getElementById('dashboard-section').classList.add('hidden');
+        document.getElementById('login-section').classList.remove('hidden');
+      });
     }
 
     function publishPost() {
@@ -131,11 +143,14 @@
       const title = document.getElementById('post-title').value.trim();
       const body = document.getElementById('post-body').value.trim();
       const status = document.getElementById('post-status');
+      const pubBtn = document.getElementById('pub-btn');
 
       if (!title || !body) {
         alert('Please enter a headline and details.');
         return;
       }
+
+      pubBtn.textContent = 'Publishing...';
 
       db.collection('posts').add({
         category: category,
@@ -143,12 +158,14 @@
         body: body,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }).then(function() {
+        pubBtn.textContent = 'Publish to Website';
         document.getElementById('post-title').value = '';
         document.getElementById('post-body').value = '';
         status.textContent = 'Published live!';
         setTimeout(function() { status.textContent = ''; }, 3000);
         loadPosts();
       }).catch(function(err) {
+        pubBtn.textContent = 'Publish to Website';
         alert('Error: ' + err.message);
       });
     }
